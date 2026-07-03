@@ -255,7 +255,7 @@ function loadVideo(){
   const v = VIDEOS[vIdx];
   const player = document.getElementById("player");
   player.src = v.file;
-  player.currentTime = 0;
+  player.load();
   document.getElementById("btnToRating").disabled = true;
   document.getElementById("videoProgress").textContent =
     `動画 ${currentIdx+1} / ${VIDEOS.length}`;
@@ -369,7 +369,7 @@ document.getElementById("btnAdminClear").addEventListener("click", ()=>{
   if(confirm("この端末に保存されているローカルバックアップを削除します。よろしいですか？")){
     localStorage.removeItem("sd_backup_results");
     alert("削除しました。");
-  } 
+  }
 });
 </script>
 </body>
