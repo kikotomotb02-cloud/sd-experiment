@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>泥はね動画 印象評価(SD法)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --main:#2b6cb0; --bg:#f7f8fa; --border:#d7dce2; --text:#222;
+  }
+  *{box-sizing:border-box;}
+  body{
+    font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
+    background:var(--bg); color:var(--text); margin:0; padding:0;
+  }
+  .screen{
+    max-width:760px; margin:0 auto; padding:24px 16px 60px;
+    min-height:100vh;
+  }
+  h1{font-size:1.2rem; text-align:center; margin-bottom:1.2em;}
+  h2{font-size:1.05rem; border-left:6px solid var(--main); padding-left:10px; margin-top:1.4em;}
+  p{line-height:1.8;}
+  .card{
+    background:#fff; border:1px solid var(--border); border-radius:10px;
+    padding:20px; margin-bottom:20px; box-shadow:0 1px 3px rgba(0,0,0,.05);
+  }
+  label.consent{display:flex; align-items:flex-start; gap:10px; margin:16px 0; cursor:pointer;}
+  input[type=checkbox]{width:22px; height:22px; margin-top:2px; flex-shrink:0;}
+  input[type=text]{
+    width:100%; padding:12px; font-size:1rem; border:1px solid var(--border);
+    border-radius:6px; margin-top:6px;
+  }
+  button{
+    background:var(--main); color:#fff; border:none; border-radius:8px;
+    padding:14px 26px; font-size:1rem; cursor:pointer; margin-top:16px;
+    touch-action:manipulation; width:100%; max-width:320px;
+  }
+  button:disabled{background:#a9b6c4; cursor:not-allowed;}
+  button.secondary{background:#6b7785;}
+  video{width:100%; border-radius:8px; background:#000; max-height:60vh;}
+  .progress{text-align:center; color:#666; margin-bottom:10px; font-size:.95rem;}
+  .table-wrap{overflow-x:auto; -webkit-overflow-scrolling:touch; margin-top:10px;}
+  table.sd{border-collapse:collapse; font-size:.9rem; min-width:640px; width:100%;}
+  table.sd th{font-weight:normal; color:#666; font-size:.72rem; padding:2px 1px;}
+  table.sd td{text-align:center; padding:10px 2px; border-bottom:1px solid #eee;}
+  table.sd td.adj{width:110px; padding:10px 6px; white-space:nowrap; font-size:.88rem;}
+  table.sd td.adj.left{text-align:right;}
+  table.sd td.adj.right{text-align:left;}
+  input[type=radio]{width:22px; height:22px; cursor:pointer;}
+  .hidden{display:none !important;}
+  .note{font-size:.85rem; color:#777;}
+  .center{text-align:center;}
+  .id-row{margin-bottom:10px;}
+  .spinner{
+    display:inline-block; width:22px; height:22px; border:3px solid #d7dce2;
+    border-top-color:var(--main); border-radius:50%; animation:spin 0.8s linear infinite;
+    vertical-align:middle; margin-right:8px;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+</style>
+</head>
+<body>
+
+<!-- ============ 画面1: 同意 ============ -->
+<div id="screen-consent" class="screen">
+  <h1>泥はね動画 印象評価実験</h1>
+  <div class="card">
+    <h2>実験について</h2>
+    <p>
+      この実験では、5本の短い動画をご覧いただき、それぞれの動画から受けた印象を
+      SD法(意味微分法)による評価シートで回答していただきます。<br>
+      動画は1本ずつランダムな順序で提示されます。各動画を最後まで視聴した後、
+      20項目の形容詞対について、最も当てはまると感じる度合いを7段階で選択してください。
+    </p>
+    <p>
+      所要時間は5〜10分程度です。回答は統計的に処理され、個人が特定される形で
+      公表されることはありません。回答はいつでも中断できます。
+    </p>
+    <label class="consent">
+      <input type="checkbox" id="agreeCheck">
+      <span>上記の内容を理解し、実験参加に同意します。</span>
+    </label>
+    <button id="btnToId" disabled>次へ進む</button>
+  </div>
+</div>
+
+<!-- ============ 画面2: 被験者ID入力 ============ -->
+<div id="screen-id" class="screen hidden">
+  <h1>被験者情報の入力</h1>
+  <div class="card">
+    <div class="id-row">
+      <label>被験者ID(氏名は入力しないでください)</label>
+      <input type="text" id="subjectId" placeholder="例: P01" inputmode="text" autocomplete="off">
+    </div>
+    <p class="note">氏名等の個人情報は入力しないでください。指定された被験者IDのみを入力してください。</p>
+    <button id="btnToInstruction" disabled>次へ進む</button>
+  </div>
+</div>
+
+<!-- ============ 画面3: 実験開始前の説明 ============ -->
+<div id="screen-instruction" class="screen hidden">
+  <h1>これから実験を開始します</h1>
+  <div class="card">
+    <p>
+      これから動画が1本ずつ表示されます。動画を最後まで視聴すると評価フォームが
+      表示されますので、各項目について直感的に感じた印象を選択してください。<br>
+      これを5本の動画すべてについて繰り返します。
+    </p>
+    <p class="note">※ 動画ごとの設定条件などは提示されません。純粋に見た印象で回答してください。</p>
+    <button id="btnStart">実験を開始する</button>
+  </div>
+</div>
+
+<!-- ============ 画面4: 動画視聴 ============ -->
+<div id="screen-video" class="screen hidden">
+  <div class="progress" id="videoProgress"></div>
+  <div class="card">
+    <video id="player" controls playsinline webkit-playsinline></video>
+    <p class="note center" id="watchHint">動画を最後まで視聴すると、評価フォームに進めます。</p>
+    <div class="center">
+      <button id="btnToRating" disabled>評価フォームへ進む</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 画面5: SD法評価フォーム ============ -->
+<div id="screen-rating" class="screen hidden">
+  <div class="progress" id="ratingProgress"></div>
+  <div class="card">
+    <h2>この動画の印象を評価してください</h2>
+    <div class="table-wrap">
+      <table class="sd" id="sdTable"></table>
+    </div>
+    <div class="center">
+      <button id="btnSubmitRating" disabled>この動画の評価を確定して次へ</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 画面6: 送信中 ============ -->
+<div id="screen-sending" class="screen hidden">
+  <div class="card center">
+    <p><span class="spinner"></span>結果を送信しています...</p>
+  </div>
+</div>
+
+<!-- ============ 画面7: 終了(被験者向け・結果は見せない) ============ -->
+<div id="screen-finish" class="screen hidden">
+  <h1>ご協力ありがとうございました</h1>
+  <div class="card">
+    <p>すべての動画の評価が完了しました。回答は送信されました。この画面を閉じていただいて構いません。</p>
+  </div>
+</div>
+
+<!-- ============ 管理者用画面(?admin=1 でアクセスした場合のみ表示) ============ -->
+<div id="screen-admin" class="screen hidden">
+  <h1>管理者用バックアップ</h1>
+  <div class="card">
+    <p class="note">
+      このページはURLに <code>?admin=1</code> を付けてアクセスした場合のみ表示されます。
+      通常の被験者用URLにはこの画面は現れません。<br>
+      スプレッドシートへの自動送信が失敗した場合の保険として、この端末(ブラウザ)に
+      保存されたローカルバックアップをExcel形式で書き出せます。
+    </p>
+    <button id="btnAdminDownload">ローカルバックアップをダウンロード(.xlsx)</button>
+    <button id="btnAdminClear" class="secondary">ローカルバックアップを削除</button>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   ここを書き換えてください
+   Google Apps Script の「ウェブアプリ」デプロイURLを設定します。
+   セットアップ手順は同梱の GoogleAppsScript_setup.txt を参照してください。
+   ============================================================ */
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyZTvMElM0C4F6ZrsSVdTJ8CSLixFAF_YTv5HIBZnBjLBrcHUVrvPjmA4uYnOPLkr-a_g/exec";
+
+/* ============ 実験条件(被験者には非公開) ============ */
+// 動画ファイルは本HTMLと同じフォルダに配置してください
+const VIDEOS = [
+  { file: "IMG_2069.MOV", psi: 5 },
+  { file: "IMG_2070.MOV", psi: 4 },
+  { file: "IMG_2071.MOV", psi: 3 },
+  { file: "IMG_2072.MOV", psi: 6 },
+  { file: "IMG_2073.MOV", psi: 7 },
+];
+
+/* SD法 20項目 (左=1, 右=7) */
+const SD_ITEMS = [
+  ["明るい","暗い"], ["やわらかい","かたい"], ["暖かい","冷たい"],
+  ["積極的な","消極的な"], ["強い","弱い"], ["静かな","うるさい"],
+  ["美しい","醜い"], ["重い","軽い"], ["良い","悪い"],
+  ["親切な","不親切な"], ["はげしい","おだやかな"], ["楽しい","苦しい"],
+  ["派手な","地味な"], ["面白い","つまらない"], ["鋭い","鈍い"],
+  ["気持ちの良い","騒がしい"], ["真面目だ","不真面目だ"], ["深い","浅い"],
+  ["慎重な","軽率な"], ["可愛らしい","憎たらしい"]
+];
+const SCALE_LABELS = ["非常に","かなり","やや","どちらでもない","やや","かなり","非常に"];
+
+let subjectId = "";
+let order = [];       // シャッフル後の VIDEOS インデックス配列
+let currentIdx = 0;   // order 内の現在位置
+let results = [];     // 各動画の回答を格納
+let consentTime = "";
+
+function show(id){
+  document.querySelectorAll(".screen").forEach(s=>s.classList.add("hidden"));
+  document.getElementById(id).classList.remove("hidden");
+}
+
+/* Fisher-Yates シャッフル */
+function shuffle(arr){
+  const a = arr.slice();
+  for(let i=a.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [a[i],a[j]] = [a[j],a[i]];
+  }
+  return a;
+}
+
+/* ---------- 管理者モード判定 ---------- */
+const isAdmin = new URLSearchParams(location.search).get("admin") === "1";
+
+/* ---------- 同意画面 ---------- */
+document.getElementById("agreeCheck").addEventListener("change", e=>{
+  document.getElementById("btnToId").disabled = !e.target.checked;
+});
+document.getElementById("btnToId").addEventListener("click", ()=>{
+  consentTime = new Date().toISOString();
+  show("screen-id");
+});
+
+/* ---------- ID画面 ---------- */
+document.getElementById("subjectId").addEventListener("input", e=>{
+  document.getElementById("btnToInstruction").disabled = e.target.value.trim()==="";
+});
+document.getElementById("btnToInstruction").addEventListener("click", ()=>{
+  subjectId = document.getElementById("subjectId").value.trim();
+  show("screen-instruction");
+});
+
+/* ---------- 説明画面 ---------- */
+document.getElementById("btnStart").addEventListener("click", ()=>{
+  order = shuffle([0,1,2,3,4]);
+  currentIdx = 0;
+  results = [];
+  loadVideo();
+  show("screen-video");
+});
+
+/* ---------- 動画画面 ---------- */
+function loadVideo(){
+  const vIdx = order[currentIdx];
+  const v = VIDEOS[vIdx];
+  const player = document.getElementById("player");
+  player.src = v.file;
+  player.currentTime = 0;
+  document.getElementById("btnToRating").disabled = true;
+  document.getElementById("videoProgress").textContent =
+    `動画 ${currentIdx+1} / ${VIDEOS.length}`;
+}
+document.getElementById("player").addEventListener("ended", ()=>{
+  document.getElementById("btnToRating").disabled = false;
+});
+document.getElementById("btnToRating").addEventListener("click", ()=>{
+  buildRatingForm();
+  show("screen-rating");
+});
+
+/* ---------- 評価フォーム ---------- */
+function buildRatingForm(){
+  document.getElementById("ratingProgress").textContent =
+    `動画 ${currentIdx+1} / ${VIDEOS.length} の評価`;
+  const table = document.getElementById("sdTable");
+  let html = "<tr><td></td>";
+  SCALE_LABELS.forEach(l=> html += `<th>${l}</th>`);
+  html += "<td></td></tr>";
+  SD_ITEMS.forEach((pair, qi)=>{
+    html += `<tr><td class="adj left">${pair[0]}</td>`;
+    for(let v=1; v<=7; v++){
+      html += `<td><input type="radio" name="q${qi}" value="${v}" onchange="checkAllAnswered()"></td>`;
+    }
+    html += `<td class="adj right">${pair[1]}</td></tr>`;
+  });
+  table.innerHTML = html;
+  document.getElementById("btnSubmitRating").disabled = true;
+}
+
+function checkAllAnswered(){
+  let allAnswered = true;
+  for(let qi=0; qi<SD_ITEMS.length; qi++){
+    if(!document.querySelector(`input[name="q${qi}"]:checked`)){
+      allAnswered = false; break;
+    }
+  }
+  document.getElementById("btnSubmitRating").disabled = !allAnswered;
+}
+
+document.getElementById("btnSubmitRating").addEventListener("click", ()=>{
+  const vIdx = order[currentIdx];
+  const v = VIDEOS[vIdx];
+  const row = {
+    "被験者ID": subjectId,
+    "同意日時": consentTime,
+    "提示順序": currentIdx+1,
+    "動画コード": "V" + (vIdx+1),          // 被験者には非公開の内部コード
+    "動画ファイル名": v.file,               // 分析用(被験者には非表示)
+    "圧力設定(psi)": v.psi,                 // 分析用(被験者には非表示)
+    "回答日時": new Date().toISOString()
+  };
+  SD_ITEMS.forEach((pair, qi)=>{
+    const val = document.querySelector(`input[name="q${qi}"]:checked`).value;
+    row[`${pair[0]}-${pair[1]}`] = Number(val);
+  });
+  results.push(row);
+
+  currentIdx++;
+  if(currentIdx < VIDEOS.length){
+    loadVideo();
+    show("screen-video");
+  } else {
+    finishAndSend();
+  }
+});
+
+/* ---------- 完了処理: 被験者には結果を見せず、研究者側にのみ送信 ---------- */
+function finishAndSend(){
+  show("screen-sending");
+
+  // 万一の送信失敗に備え、この端末にバックアップを保存(被験者には非表示。
+  // 管理者が ?admin=1 でアクセスした時のみ取り出せる)
+  try{
+    const backupKey = "sd_backup_results";
+    const prev = JSON.parse(localStorage.getItem(backupKey) || "[]");
+    const merged = prev.concat(results);
+    localStorage.setItem(backupKey, JSON.stringify(merged));
+  }catch(e){ /* localStorageが使えない環境は無視 */ }
+
+  // Google Apps Script 経由でスプレッドシートへ送信(被験者はこの結果を見ない)
+  const sendPromise = SCRIPT_URL.includes("XXXX")
+    ? Promise.resolve() // URL未設定の場合は送信をスキップ(テスト用)
+    : fetch(SCRIPT_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(results)
+      }).catch(()=>{ /* ネットワークエラーはローカルバックアップで担保 */ });
+
+  // no-corsの応答は中身を読めないため、一定時間待って完了画面へ
+  Promise.resolve(sendPromise).finally(()=>{
+    setTimeout(()=> show("screen-finish"), 700);
+  });
+}
+
+/* ---------- 管理者用バックアップ書き出し ---------- */
+if(isAdmin){
+  document.addEventListener("DOMContentLoaded", ()=> show("screen-admin"));
+}
+document.getElementById("btnAdminDownload").addEventListener("click", ()=>{
+  const backup = JSON.parse(localStorage.getItem("sd_backup_results") || "[]");
+  if(backup.length === 0){ alert("この端末にはローカルバックアップがありません。"); return; }
+  const ws = XLSX.utils.json_to_sheet(backup);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "結果");
+  XLSX.writeFile(wb, `SD結果_backup_${Date.now()}.xlsx`);
+});
+document.getElementById("btnAdminClear").addEventListener("click", ()=>{
+  if(confirm("この端末に保存されているローカルバックアップを削除します。よろしいですか？")){
+    localStorage.removeItem("sd_backup_results");
+    alert("削除しました。");
+  }
+});
+</script>
+</body>
+</html>
